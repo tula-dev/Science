@@ -1,0 +1,324 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; }
+  #app { display: flex; gap: 0; min-height: 600px; background: #0a0e1a; color: #e8f4ff; border-radius: 12px; overflow: hidden; }
+  #canvas-panel { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 16px 12px; }
+  #info-panel { width: 240px; background: #111827; border-left: 1px solid #1e3a5f; padding: 16px; overflow-y: auto; font-size: 13px; display: flex; flex-direction: column; gap: 12px; }
+  #title-bar { text-align: center; margin-bottom: 8px; }
+  #title-bar h2 { font-size: 18px; font-weight: 500; color: #7dd3fc; letter-spacing: 0.5px; }
+  #title-bar p { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+  #controls { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 520px; }
+  .ctrl-row { display: flex; align-items: center; gap: 10px; }
+  .ctrl-row label { font-size: 12px; color: #94a3b8; min-width: 52px; }
+  .ctrl-row input[type=range] { flex: 1; }
+  .ctrl-row span { font-size: 12px; color: #7dd3fc; min-width: 28px; text-align: right; }
+  .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+  .btn { padding: 6px 14px; border-radius: 6px; border: 1px solid #1e3a5f; background: #1a2744; color: #7dd3fc; font-size: 12px; cursor: pointer; transition: background 0.15s; }
+  .btn:hover { background: #1e3a5f; }
+  .btn.active { background: #1e3a5f; border-color: #38bdf8; color: #38bdf8; }
+  canvas { border-radius: 8px; background: #060c18; width: 100%; max-width: 520px; display: block; }
+  .info-section { background: #1a2744; border-radius: 8px; padding: 10px; border-left: 3px solid #38bdf8; }
+  .info-section h3 { font-size: 12px; font-weight: 500; color: #38bdf8; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .info-section p { font-size: 12px; color: #cbd5e1; line-height: 1.6; }
+  .base-key { display: flex; flex-direction: column; gap: 4px; }
+  .base-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .base-dot { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+  .base-name { color: #e2e8f0; font-weight: 500; min-width: 20px; }
+  .base-desc { color: #94a3b8; font-size: 11px; }
+  .pair-arrow { color: #475569; margin: 0 2px; }
+  .status-bar { font-size: 11px; color: #475569; text-align: center; margin-top: 4px; min-height: 16px; }
+  #step-info { background: #0f1d35; border-radius: 8px; padding: 10px; min-height: 56px; }
+  #step-info h3 { font-size: 12px; color: #7dd3fc; font-weight: 500; margin-bottom: 4px; }
+  #step-info p { font-size: 12px; color: #94a3b8; line-height: 1.5; }
+</style>
+
+<div id="app">
+  <div id="canvas-panel">
+    <div id="title-bar">
+      <h2>DNA / RNA Simulator</h2>
+      <p>Watch base pairing happen in real time</p>
+    </div>
+    <canvas id="helix" height="380"></canvas>
+    <div class="status-bar" id="status"></div>
+    <div id="controls" style="margin-top:10px;">
+      <div class="btn-group">
+        <button class="btn active" id="btn-dna" onclick="setMode('dna')">DNA Replication</button>
+        <button class="btn" id="btn-rna" onclick="setMode('rna')">RNA Transcription</button>
+        <button class="btn" id="btn-play" onclick="togglePlay()">&#9646;&#9646; Pause</button>
+        <button class="btn" onclick="reset()">&#8635; Reset</button>
+      </div>
+      <div class="ctrl-row">
+        <label>Speed</label>
+        <input type="range" min="1" max="10" value="5" id="speed-slider" oninput="updateSpeed(this.value)">
+        <span id="speed-val">5</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="info-panel">
+    <div id="step-info">
+      <h3 id="step-title">DNA Replication</h3>
+      <p id="step-desc">Bases fall into place along the template strand. Each base can only pair with its complement.</p>
+    </div>
+
+    <div class="info-section">
+      <h3>Base pairing rules</h3>
+      <div class="base-key">
+        <div class="base-row"><div class="base-dot" style="background:#ef4444"></div><span class="base-name">A</span><span class="pair-arrow">↔</span><div class="base-dot" style="background:#3b82f6"></div><span class="base-name">T</span><span class="base-desc"> (DNA)</span></div>
+        <div class="base-row"><div class="base-dot" style="background:#22c55e"></div><span class="base-name">G</span><span class="pair-arrow">↔</span><div class="base-dot" style="background:#f59e0b"></div><span class="base-name">C</span></div>
+        <div class="base-row" id="rna-pair-row" style="display:none"><div class="base-dot" style="background:#ef4444"></div><span class="base-name">A</span><span class="pair-arrow">↔</span><div class="base-dot" style="background:#d946ef"></div><span class="base-name">U</span><span class="base-desc"> (RNA)</span></div>
+      </div>
+    </div>
+
+    <div class="info-section">
+      <h3>Why these pairs?</h3>
+      <p>A pairs with T (or U in RNA) via 2 hydrogen bonds. G pairs with C via 3 hydrogen bonds — making G-C bonds slightly stronger. This complementary pairing ensures genetic information copies accurately.</p>
+    </div>
+
+    <div class="info-section" id="mode-info">
+      <h3>What is happening?</h3>
+      <p id="mode-text">In DNA replication, the double helix unwinds. Each original strand becomes a template, and free-floating nucleotides snap into their complementary positions to build two identical DNA copies.</p>
+    </div>
+
+    <div class="info-section">
+      <h3>The helix shape</h3>
+      <p>DNA's two strands wrap around each other. The zig-zag offset you see here represents how the strands spiral — the classic double helix discovered by Watson and Crick in 1953.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('helix');
+const ctx = canvas.getContext('2d');
+let mode = 'dna';
+let playing = true;
+let speed = 5;
+let animFrame = 0;
+let fallingBases = [];
+let completedPairs = [];
+let tick = 0;
+let spawnTimer = 0;
+
+const SEQ = ['A','T','G','C','A','G','T','C','G','A','C','T','G','A','T'];
+const DNA_COMP = {A:'T',T:'A',G:'C',C:'G'};
+const RNA_COMP = {A:'U',T:'A',G:'C',C:'G'};
+const BASE_COLOR = {
+  A:'#ef4444', T:'#3b82f6', G:'#22c55e', C:'#f59e0b',
+  U:'#d946ef'
+};
+
+function getComp(b) { return mode === 'rna' ? RNA_COMP[b] : DNA_COMP[b]; }
+
+function resize() {
+  const panel = canvas.parentElement;
+  const w = Math.min(panel.clientWidth - 24, 520);
+  canvas.width = w;
+}
+resize();
+
+const PAIRS = SEQ.length;
+function getHelixX(i, strand, t) {
+  const w = canvas.width;
+  const amp = w * 0.13;
+  const center = w / 2;
+  const phase = (i / PAIRS) * Math.PI * 3;
+  const wobble = strand === 0 ? 0 : Math.PI;
+  return center + Math.sin(phase + wobble) * amp;
+}
+function getHelixY(i) {
+  const h = canvas.height;
+  const topPad = 30, botPad = 30;
+  return topPad + (i / (PAIRS - 1)) * (h - topPad - botPad);
+}
+
+function reset() {
+  completedPairs = [];
+  fallingBases = [];
+  tick = 0; spawnTimer = 0;
+  draw();
+}
+
+function setMode(m) {
+  mode = m;
+  reset();
+  document.getElementById('btn-dna').classList.toggle('active', m === 'dna');
+  document.getElementById('btn-rna').classList.toggle('active', m === 'rna');
+  document.getElementById('rna-pair-row').style.display = m === 'rna' ? 'flex' : 'none';
+  const modeText = document.getElementById('mode-text');
+  const stepTitle = document.getElementById('step-title');
+  const stepDesc = document.getElementById('step-desc');
+  if (m === 'rna') {
+    stepTitle.textContent = 'RNA Transcription';
+    stepDesc.textContent = 'RNA polymerase reads the DNA template and builds a complementary mRNA strand — replacing T with U.';
+    modeText.textContent = 'In RNA transcription, only one strand of DNA is read. RNA nucleotides (using U instead of T) bind to the template, producing a messenger RNA (mRNA) strand that carries the genetic code to ribosomes.';
+  } else {
+    stepTitle.textContent = 'DNA Replication';
+    stepDesc.textContent = 'Bases fall into place along the template strand. Each base can only pair with its complement.';
+    modeText.textContent = 'In DNA replication, the double helix unwinds. Each original strand becomes a template, and free-floating nucleotides snap into their complementary positions to build two identical DNA copies.';
+  }
+}
+
+function togglePlay() {
+  playing = !playing;
+  document.getElementById('btn-play').innerHTML = playing ? '&#9646;&#9646; Pause' : '&#9654; Play';
+  if (playing) loop();
+}
+
+function updateSpeed(v) {
+  speed = parseInt(v);
+  document.getElementById('speed-val').textContent = v;
+}
+
+function spawnBase(i) {
+  const comp = getComp(SEQ[i]);
+  const targetX = getHelixX(i, 1, 0);
+  const targetY = getHelixY(i);
+  const side = Math.random() > 0.5 ? 1 : -1;
+  fallingBases.push({
+    i, base: comp,
+    x: targetX + side * (canvas.width * 0.35 + Math.random() * 30),
+    y: targetY - 40 - Math.random() * 40,
+    tx: targetX, ty: targetY,
+    progress: 0, done: false,
+    alpha: 0
+  });
+}
+
+function draw() {
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  ctx.fillStyle = '#060c18';
+  ctx.fillRect(0, 0, w, h);
+
+  const t = tick * 0.02;
+
+  for (let i = 0; i < PAIRS - 1; i++) {
+    const x0 = getHelixX(i, 0, t), y0 = getHelixY(i);
+    const x1 = getHelixX(i+1, 0, t), y1 = getHelixY(i+1);
+    ctx.strokeStyle = 'rgba(100,180,255,0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  }
+
+  for (let i = 0; i < PAIRS - 1; i++) {
+    if (completedPairs.includes(i)) {
+      const x0 = getHelixX(i, 1, t), y0 = getHelixY(i);
+      const x1 = getHelixX(i+1, 1, t), y1 = getHelixY(i+1);
+      const color = mode === 'rna' ? 'rgba(217,70,239,0.35)' : 'rgba(100,180,255,0.35)';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    }
+  }
+
+  for (let i = 0; i < PAIRS; i++) {
+    if (completedPairs.includes(i)) {
+      const x0 = getHelixX(i, 0, t), y0 = getHelixY(i);
+      const x1 = getHelixX(i, 1, t);
+      ctx.strokeStyle = 'rgba(148,163,184,0.3)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  for (let i = 0; i < PAIRS; i++) {
+    const x = getHelixX(i, 0, t), y = getHelixY(i);
+    const base = SEQ[i];
+    const color = BASE_COLOR[base];
+    ctx.beginPath();
+    ctx.arc(x, y, 12, 0, Math.PI*2);
+    ctx.fillStyle = color + 'cc';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(base, x, y);
+  }
+
+  for (const fb of fallingBases) {
+    if (fb.done) continue;
+    const x = fb.tx + (fb.x - fb.tx) * (1 - fb.progress);
+    const y = fb.ty + (fb.y - fb.ty) * (1 - fb.progress);
+    const alpha = fb.alpha;
+    const color = BASE_COLOR[fb.base];
+    ctx.beginPath();
+    ctx.arc(x, y, 11, 0, Math.PI*2);
+    ctx.fillStyle = color + Math.floor(alpha*200).toString(16).padStart(2,'0');
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = alpha;
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(fb.base, x, y);
+    ctx.globalAlpha = 1;
+  }
+
+  for (let i of completedPairs) {
+    const x = getHelixX(i, 1, t), y = getHelixY(i);
+    const base = getComp(SEQ[i]);
+    const color = BASE_COLOR[base];
+    ctx.beginPath();
+    ctx.arc(x, y, 12, 0, Math.PI*2);
+    ctx.fillStyle = color + 'cc';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(base, x, y);
+  }
+
+  const done = completedPairs.length;
+  const pct = Math.round((done / PAIRS) * 100);
+  document.getElementById('status').textContent = done < PAIRS
+    ? `Pairing bases... ${done}/${PAIRS} (${pct}%)`
+    : (mode === 'rna' ? 'mRNA strand complete! Transcription done.' : 'Replication complete! Two identical strands formed.');
+}
+
+function loop() {
+  if (!playing) return;
+  tick++;
+  spawnTimer++;
+
+  const interval = Math.max(2, Math.round(18 - speed * 1.5));
+  if (spawnTimer >= interval && completedPairs.length < PAIRS) {
+    const next = completedPairs.length + fallingBases.filter(f=>!f.done).length;
+    if (next < PAIRS) spawnBase(next);
+    spawnTimer = 0;
+  }
+
+  for (const fb of fallingBases) {
+    if (fb.done) continue;
+    fb.progress = Math.min(1, fb.progress + 0.035 * (speed / 5));
+    fb.alpha = Math.min(1, fb.alpha + 0.06);
+    if (fb.progress >= 1) {
+      fb.done = true;
+      if (!completedPairs.includes(fb.i)) completedPairs.push(fb.i);
+    }
+  }
+
+  if (completedPairs.length >= PAIRS) {
+    fallingBases = fallingBases.filter(f=>!f.done || completedPairs.includes(f.i));
+  }
+
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
